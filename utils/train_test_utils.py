@@ -1,6 +1,7 @@
 import torch
 from tqdm import tqdm
 from sklearn.metrics import classification_report, confusion_matrix
+import numpy as np
 
 def train_model(model, train_loader, criterion, optimizer, epoch, device, batch_log_freq = 10):
     model.train()
@@ -22,8 +23,8 @@ def train_model(model, train_loader, criterion, optimizer, epoch, device, batch_
         preds = y_hat.argmax(dim=1)
         total_correct += (preds == y).sum().item()
         total_seen += y.numel()
-        all_preds.append(preds.detach().cpu())
-        all_targets.append(y.detach().cpu())
+        all_preds.append(preds.detach().cpu().numpy())
+        all_targets.append(y.detach().cpu().numpy())
 
     avg_loss = running_loss / len(train_loader)
     accuracy = total_correct / max(1, total_seen)
@@ -31,8 +32,8 @@ def train_model(model, train_loader, criterion, optimizer, epoch, device, batch_
 
     # Detailed metrics for training
     if all_preds and all_targets:
-        y_true = torch.cat(all_targets).numpy()
-        y_pred = torch.cat(all_preds).numpy()
+        y_true = np.concatenate(all_targets)
+        y_pred = np.concatenate(all_preds)
         print("\nTraining Classification report:")
         print(classification_report(y_true, y_pred, digits=4))
         cm = confusion_matrix(y_true, y_pred)
@@ -92,8 +93,8 @@ def test_model(model, test_loader, criterion, device, batch_log_freq = 10):
             preds = y_hat.argmax(dim=1)
             total_correct += (preds == y).sum().item()
             total_seen += y.numel()
-            all_preds.append(preds.detach().cpu())
-            all_targets.append(y.detach().cpu())
+            all_preds.append(preds.detach().cpu().numpy())
+            all_targets.append(y.detach().cpu().numpy())
 
     avg_loss = running_loss / len(test_loader)
     accuracy = total_correct / max(1, total_seen)
@@ -101,8 +102,8 @@ def test_model(model, test_loader, criterion, device, batch_log_freq = 10):
 
     # Detailed metrics
     if all_preds and all_targets:
-        y_true = torch.cat(all_targets).numpy()
-        y_pred = torch.cat(all_preds).numpy()
+        y_true = np.concatenate(all_targets)
+        y_pred = np.concatenate(all_preds)
         print("\nValidation Classification report:")
         print(classification_report(y_true, y_pred, digits=4))
         cm = confusion_matrix(y_true, y_pred)
