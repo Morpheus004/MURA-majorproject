@@ -160,7 +160,7 @@ def load_and_plot_training_history(file_path='training_history.pt', save_path='p
         save_path (str): Directory to save plots
     """
     try:
-        training_history = torch.load(file_path, map_location='cpu')['training_history']
+        training_history = torch.load(file_path, map_location='cpu', weights_only=False)['training_history']
         print(f"Loaded training history from {file_path}")
         print(f"Training completed for {len(training_history['epochs'])} epochs")
         
