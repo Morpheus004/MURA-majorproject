@@ -23,14 +23,16 @@ class EarlyStopping:
         self.best_score = None
         self.early_stop = False
         self.best_weights = None
+        self.best_epoch = None
         
-    def __call__(self, val_recall, model):
+    def __call__(self, val_recall, model, epoch=None):
         """
         Check if early stopping criteria is met.
         
         Args:
             val_recall (float): Current validation recall for class 1
             model: PyTorch model to potentially restore weights from
+            epoch (int, optional): Current epoch index to record when improvement occurs
             
         Returns:
             bool: True if early stopping should be triggered
@@ -39,7 +41,7 @@ class EarlyStopping:
         
         if self.best_score is None:
             self.best_score = score
-            self.save_checkpoint(model)
+            self.save_checkpoint(model, epoch)
         elif score < self.best_score + self.min_delta:
             self.counter += 1
             if self.verbose:
@@ -51,19 +53,24 @@ class EarlyStopping:
         else:
             self.best_score = score
             self.counter = 0
-            self.save_checkpoint(model)
+            self.save_checkpoint(model, epoch)
             
         return self.early_stop
     
-    def save_checkpoint(self, model):
+    def save_checkpoint(self, model, epoch=None):
         """Save model weights when validation recall improves."""
         if self.restore_best_weights:
             self.best_weights = copy.deepcopy(model.state_dict())
+            if epoch is not None:
+                self.best_epoch = epoch
     
     def restore_weights(self, model):
         """Restore model to best weights."""
         if self.restore_best_weights and self.best_weights is not None:
             model.load_state_dict(self.best_weights)
             if self.verbose:
-                print("Model weights restored to best epoch")
+                if self.best_epoch is not None:
+                    print(f"Model weights restored to best epoch {self.best_epoch}")
+                else:
+                    print("Model weights restored to best epoch")
 
