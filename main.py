@@ -128,7 +128,7 @@ def main():
         })
         
 
-        if early_stopping(val_recall, model):
+        if early_stopping(val_recall, val_loss, model, epoch):
             print("Early stopping triggered")
             break
         
