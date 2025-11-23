@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import seaborn as sns
-from sklearn.metrics import confusion_matrix, cohen_kappa_score, precision_score, recall_score, f1_score, accuracy_score
+from sklearn.metrics import confusion_matrix, cohen_kappa_score, precision_score, recall_score, f1_score, accuracy_score, roc_curve, roc_auc_score
 import os
 from collections import defaultdict
 from tqdm import tqdm
@@ -180,7 +180,7 @@ def evaluate_model_per_region(model, val_dataset, device, batch_size=16):
     from torch.utils.data import DataLoader
     
     model.eval()
-    region_predictions = defaultdict(lambda: {'y_true': [], 'y_pred': []})
+    region_predictions = defaultdict(lambda: {'y_true': [], 'y_pred': [], 'y_proba': []})
     
     # Create a dataloader
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
@@ -205,6 +205,8 @@ def evaluate_model_per_region(model, val_dataset, device, batch_size=16):
         for batch_idx, (x, y) in enumerate(tqdm(val_loader, desc="Evaluating per region")):
             x, y = x.to(device), y.to(device)
             y_hat = model(x)
+            # Get probabilities for class 1 (positive class)
+            probs = torch.softmax(y_hat, dim=1)[:, 1]  # Probability of class 1
             preds = y_hat.argmax(dim=1)
             
             # Get regions for this batch
@@ -215,17 +217,25 @@ def evaluate_model_per_region(model, val_dataset, device, batch_size=16):
                     region = dataset.samples.iloc[sample_idx]['region']
                     region_predictions[region]['y_true'].append(y[i].cpu().item())
                     region_predictions[region]['y_pred'].append(preds[i].cpu().item())
+                    region_predictions[region]['y_proba'].append(probs[i].cpu().item())
                     idx_counter += 1
     
-    # Convert lists to numpy arrays and compute confusion matrices and kappa
+    # Convert lists to numpy arrays and compute confusion matrices, kappa, and AUC
     region_cms = {}
     for region, data in region_predictions.items():
         if len(data['y_true']) > 0:
             y_true = np.array(data['y_true'])
             y_pred = np.array(data['y_pred'])
+            y_proba = np.array(data['y_proba'])
             cm = confusion_matrix(y_true, y_pred)
             kappa = cohen_kappa_score(y_true, y_pred)
-            region_cms[region] = {'cm': cm, 'kappa': kappa}
+            # Calculate AUC-ROC
+            try:
+                auc = roc_auc_score(y_true, y_proba)
+            except ValueError:
+                # Handle case where only one class is present
+                auc = 0.0
+            region_cms[region] = {'cm': cm, 'kappa': kappa, 'y_true': y_true, 'y_proba': y_proba, 'auc': auc}
     
     return region_cms
 
@@ -259,26 +269,27 @@ def plot_region_confusion_matrices(region_cms, save_path='plots'):
     else:
         axes = axes.flatten()
     
-    print("\nCohen's Kappa per Region:")
-    print("-" * 40)
+    print("\nCohen's Kappa and AUC-ROC per Region:")
+    print("-" * 50)
     
     for i, region in enumerate(regions):
         region_data = region_cms[region]
         cm = region_data['cm']
         kappa = region_data['kappa']
+        auc = region_data.get('auc', 0.0)
         ax = axes[i] if n_regions > 1 else axes[0]
         
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
                    xticklabels=['Class 0', 'Class 1'],
                    yticklabels=['Class 0', 'Class 1'],
                    ax=ax, cbar_kws={'shrink': 0.8})
-        ax.set_title(f'{region}\n(n={cm.sum()}, κ={kappa:.3f})', fontsize=12, fontweight='bold')
+        ax.set_title(f'{region}\n(n={cm.sum()}, κ={kappa:.3f}, AUC={auc:.3f})', fontsize=12, fontweight='bold')
         ax.set_xlabel('Predicted', fontsize=10)
         ax.set_ylabel('Actual', fontsize=10)
         
-        print(f"{region:12s}: {kappa:.4f}")
+        print(f"{region:12s}: Kappa={kappa:.4f}, AUC={auc:.4f}")
     
-    print("-" * 40)
+    print("-" * 50)
     
     # Hide unused subplots
     for i in range(n_regions, len(axes)):
@@ -340,6 +351,9 @@ def calculate_region_metrics(region_cms):
         # Specificity (Class 0)
         specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
         
+        # Get AUC from region_data if available
+        auc = region_data.get('auc', 0.0)
+        
         region_metrics[region] = {
             'accuracy': accuracy,
             'precision': precision,
@@ -347,6 +361,7 @@ def calculate_region_metrics(region_cms):
             'f1_score': f1,
             'specificity': specificity,
             'kappa': kappa,
+            'auc': auc,
             'n_samples': int(cm.sum()),
             'tp': int(tp),
             'tn': int(tn),
@@ -378,10 +393,11 @@ def plot_region_metrics(region_metrics, save_path='plots'):
     recalls = [region_metrics[r]['recall'] for r in regions]
     f1_scores = [region_metrics[r]['f1_score'] for r in regions]
     kappas = [region_metrics[r]['kappa'] for r in regions]
+    aucs = [region_metrics[r]['auc'] for r in regions]
     specificities = [region_metrics[r]['specificity'] for r in regions]
     
-    # Create figure with subplots
-    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    # Create figure with subplots (2x4 to include AUC)
+    fig, axes = plt.subplots(2, 4, figsize=(20, 10))
     
     # 1. Accuracy
     axes[0, 0].bar(regions, accuracies, color='steelblue', alpha=0.7)
@@ -433,26 +449,106 @@ def plot_region_metrics(region_metrics, save_path='plots'):
     for i, v in enumerate(kappas):
         axes[1, 1].text(i, v + 0.01, f'{v:.3f}', ha='center', va='bottom', fontsize=9)
     
-    # 6. Combined metrics comparison
-    x = np.arange(len(regions))
-    width = 0.15
-    axes[1, 2].bar(x - 2*width, accuracies, width, label='Accuracy', alpha=0.7)
-    axes[1, 2].bar(x - width, precisions, width, label='Precision', alpha=0.7)
-    axes[1, 2].bar(x, recalls, width, label='Recall', alpha=0.7)
-    axes[1, 2].bar(x + width, f1_scores, width, label='F1-Score', alpha=0.7)
-    axes[1, 2].bar(x + 2*width, kappas, width, label="Kappa", alpha=0.7)
-    axes[1, 2].set_title('All Metrics Comparison', fontsize=14, fontweight='bold')
-    axes[1, 2].set_ylabel('Score', fontsize=12)
-    axes[1, 2].set_xticks(x)
+    # 6. AUC-ROC
+    axes[1, 2].bar(regions, aucs, color='crimson', alpha=0.7)
+    axes[1, 2].set_title('AUC-ROC per Region', fontsize=14, fontweight='bold')
+    axes[1, 2].set_ylabel('AUC-ROC', fontsize=12)
     axes[1, 2].set_xticklabels(regions, rotation=45, ha='right')
-    axes[1, 2].legend(loc='upper left', fontsize=9)
     axes[1, 2].grid(True, alpha=0.3, axis='y')
     axes[1, 2].set_ylim([0, 1])
+    for i, v in enumerate(aucs):
+        axes[1, 2].text(i, v + 0.01, f'{v:.3f}', ha='center', va='bottom', fontsize=9)
+    
+    # 7. Combined metrics comparison
+    x = np.arange(len(regions))
+    width = 0.12
+    axes[1, 3].bar(x - 2.5*width, accuracies, width, label='Accuracy', alpha=0.7)
+    axes[1, 3].bar(x - 1.5*width, precisions, width, label='Precision', alpha=0.7)
+    axes[1, 3].bar(x - 0.5*width, recalls, width, label='Recall', alpha=0.7)
+    axes[1, 3].bar(x + 0.5*width, f1_scores, width, label='F1-Score', alpha=0.7)
+    axes[1, 3].bar(x + 1.5*width, kappas, width, label="Kappa", alpha=0.7)
+    axes[1, 3].bar(x + 2.5*width, aucs, width, label="AUC-ROC", alpha=0.7)
+    axes[1, 3].set_title('All Metrics Comparison', fontsize=14, fontweight='bold')
+    axes[1, 3].set_ylabel('Score', fontsize=12)
+    axes[1, 3].set_xticks(x)
+    axes[1, 3].set_xticklabels(regions, rotation=45, ha='right')
+    axes[1, 3].legend(loc='upper left', fontsize=8)
+    axes[1, 3].grid(True, alpha=0.3, axis='y')
+    axes[1, 3].set_ylim([0, 1])
     
     plt.tight_layout()
     plt.savefig(f'{save_path}/region_metrics_comparison.png', dpi=300, bbox_inches='tight')
     plt.show()
     print(f"Region metrics comparison saved to {save_path}/region_metrics_comparison.png")
+
+def plot_roc_curves(region_cms, save_path='plots'):
+    """
+    Plot ROC curves for each region and overall validation set.
+    
+    Args:
+        region_cms (dict): Dictionary mapping region names to dicts with 'y_true', 'y_proba', and 'auc'
+        save_path (str): Directory to save plots
+    """
+    os.makedirs(save_path, exist_ok=True)
+    
+    if not region_cms:
+        print("No region data to plot ROC curves.")
+        return
+    
+    regions = sorted(region_cms.keys())
+    
+    plt.figure(figsize=(10, 8))
+    
+    # Collect all data for overall ROC curve
+    all_y_true = []
+    all_y_proba = []
+    
+    # Plot ROC curve for each region
+    for region in regions:
+        region_data = region_cms[region]
+        y_true = region_data['y_true']
+        y_proba = region_data['y_proba']
+        auc = region_data.get('auc', 0.0)
+        
+        # Collect for overall calculation
+        all_y_true.extend(y_true)
+        all_y_proba.extend(y_proba)
+        
+        # Calculate ROC curve
+        fpr, tpr, _ = roc_curve(y_true, y_proba)
+        
+        # Plot ROC curve
+        plt.plot(fpr, tpr, linewidth=2, label=f'{region} (AUC = {auc:.3f})')
+    
+    # Calculate and plot overall ROC curve
+    if len(all_y_true) > 0 and len(all_y_proba) > 0:
+        all_y_true = np.array(all_y_true)
+        all_y_proba = np.array(all_y_proba)
+        try:
+            overall_auc = roc_auc_score(all_y_true, all_y_proba)
+            overall_fpr, overall_tpr, _ = roc_curve(all_y_true, all_y_proba)
+            # Plot overall ROC curve with thicker line and different style
+            plt.plot(overall_fpr, overall_tpr, linewidth=3, linestyle='-', 
+                    color='black', label=f'Overall (AUC = {overall_auc:.3f})', zorder=10)
+            print(f"\nOverall Validation Set AUC-ROC: {overall_auc:.4f}")
+        except ValueError as e:
+            print(f"Warning: Could not calculate overall AUC: {e}")
+    
+    # Plot diagonal line (random classifier)
+    plt.plot([0, 1], [0, 1], 'k--', linewidth=1, label='Random (AUC = 0.500)')
+    
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate', fontsize=12)
+    plt.ylabel('True Positive Rate', fontsize=12)
+    plt.title('ROC Curves per Region and Overall', fontsize=14, fontweight='bold')
+    plt.legend(loc='lower right', fontsize=10)
+    plt.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(f'{save_path}/roc_curves_per_region.png', dpi=300, bbox_inches='tight')
+    plt.show()
+    print(f"ROC curves saved to {save_path}/roc_curves_per_region.png")
 
 def print_region_metrics_table(region_metrics):
     """
@@ -466,15 +562,15 @@ def print_region_metrics_table(region_metrics):
     print("\n" + "=" * 100)
     print("REGION-WISE METRICS SUMMARY")
     print("=" * 100)
-    print(f"{'Region':<12} {'N':<8} {'Accuracy':<10} {'Precision':<10} {'Recall':<10} {'F1-Score':<10} {'Kappa':<10} {'Specificity':<10}")
-    print("-" * 100)
+    print(f"{'Region':<12} {'N':<8} {'Accuracy':<10} {'Precision':<10} {'Recall':<10} {'F1-Score':<10} {'Kappa':<10} {'AUC-ROC':<10} {'Specificity':<10}")
+    print("-" * 110)
     
     for region in regions:
         m = region_metrics[region]
         print(f"{region:<12} {m['n_samples']:<8} {m['accuracy']:<10.4f} {m['precision']:<10.4f} "
-              f"{m['recall']:<10.4f} {m['f1_score']:<10.4f} {m['kappa']:<10.4f} {m['specificity']:<10.4f}")
+              f"{m['recall']:<10.4f} {m['f1_score']:<10.4f} {m['kappa']:<10.4f} {m['auc']:<10.4f} {m['specificity']:<10.4f}")
     
-    print("-" * 100)
+    print("-" * 110)
     
     # Calculate averages
     avg_acc = np.mean([region_metrics[r]['accuracy'] for r in regions])
@@ -482,12 +578,13 @@ def print_region_metrics_table(region_metrics):
     avg_rec = np.mean([region_metrics[r]['recall'] for r in regions])
     avg_f1 = np.mean([region_metrics[r]['f1_score'] for r in regions])
     avg_kappa = np.mean([region_metrics[r]['kappa'] for r in regions])
+    avg_auc = np.mean([region_metrics[r]['auc'] for r in regions])
     avg_spec = np.mean([region_metrics[r]['specificity'] for r in regions])
     total_samples = sum([region_metrics[r]['n_samples'] for r in regions])
     
     print(f"{'AVERAGE':<12} {total_samples:<8} {avg_acc:<10.4f} {avg_prec:<10.4f} "
-          f"{avg_rec:<10.4f} {avg_f1:<10.4f} {avg_kappa:<10.4f} {avg_spec:<10.4f}")
-    print("=" * 100)
+          f"{avg_rec:<10.4f} {avg_f1:<10.4f} {avg_kappa:<10.4f} {avg_auc:<10.4f} {avg_spec:<10.4f}")
+    print("=" * 110)
 
 def load_and_plot_training_history(file_path='training_history.pt', save_path='plots'):
     """

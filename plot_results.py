@@ -14,7 +14,8 @@ from utils.plot_utils import (
     plot_region_confusion_matrices,
     calculate_region_metrics,
     plot_region_metrics,
-    print_region_metrics_table
+    print_region_metrics_table,
+    plot_roc_curves
 )
 from utils.dataset import MuraDataset
 from torch.utils.data import Subset
@@ -106,10 +107,15 @@ def main():
         print("\n📊 Plotting metrics comparison per region...")
         plot_region_metrics(region_metrics, save_path='plots')
         
+        # Plot ROC curves per region
+        print("\n📊 Plotting ROC curves per region...")
+        plot_roc_curves(region_cms, save_path='plots')
+        
         print("\n✅ Per-region analysis generated successfully!")
         print("📁 Check the 'plots' directory for:")
         print("   • confusion_matrices_per_region.png - Confusion matrices for each region")
         print("   • region_metrics_comparison.png - Comprehensive metrics comparison per region")
+        print("   • roc_curves_per_region.png - ROC curves for each region")
         
     except Exception as e:
         print(f"❌ Error generating per-region analysis: {e}")
