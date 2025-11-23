@@ -1,6 +1,6 @@
 import torch
 from tqdm import tqdm
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, cohen_kappa_score
 import numpy as np
 
 def train_model(model, train_loader, criterion, optimizer, epoch, device, batch_log_freq = 10):
@@ -59,12 +59,17 @@ def train_model(model, train_loader, criterion, optimizer, epoch, device, batch_
                 recall = 0.0
             recall_scores.append(recall)
         
+        # Calculate Cohen's kappa
+        kappa = cohen_kappa_score(y_true, y_pred)
+        print(f"Training Cohen's Kappa: {kappa:.4f}")
+        
         return {
             'avg_loss': avg_loss,
             'accuracy': accuracy,
             'confusion_matrix': cm,
             'precision': precision_scores,
-            'recall': recall_scores
+            'recall': recall_scores,
+            'kappa': kappa
         }
     else:
         return {
@@ -72,7 +77,8 @@ def train_model(model, train_loader, criterion, optimizer, epoch, device, batch_
             'accuracy': accuracy,
             'confusion_matrix': None,
             'precision': None,
-            'recall': None
+            'recall': None,
+            'kappa': None
         }
 
 def test_model(model, test_loader, criterion, device, batch_log_freq = 10):
@@ -129,12 +135,17 @@ def test_model(model, test_loader, criterion, device, batch_log_freq = 10):
                 recall = 0.0
             recall_scores.append(recall)
         
+        # Calculate Cohen's kappa
+        kappa = cohen_kappa_score(y_true, y_pred)
+        print(f"Validation Cohen's Kappa: {kappa:.4f}")
+        
         return {
             'avg_loss': avg_loss,
             'accuracy': accuracy,
             'confusion_matrix': cm,
             'precision': precision_scores,
-            'recall': recall_scores
+            'recall': recall_scores,
+            'kappa': kappa
         }
     else:
         return {
@@ -142,5 +153,6 @@ def test_model(model, test_loader, criterion, device, batch_log_freq = 10):
             'accuracy': accuracy,
             'confusion_matrix': None,
             'precision': None,
-            'recall': None
+            'recall': None,
+            'kappa': None
         }
