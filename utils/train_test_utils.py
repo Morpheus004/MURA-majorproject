@@ -1,9 +1,12 @@
-import torch
-from tqdm import tqdm
-from sklearn.metrics import classification_report, confusion_matrix, cohen_kappa_score
 import numpy as np
+import torch
+from sklearn.metrics import classification_report, cohen_kappa_score, confusion_matrix
+from tqdm import tqdm
 
-def train_model(model, train_loader, criterion, optimizer, epoch, device, batch_log_freq = 10):
+
+def train_model(
+    model, train_loader, criterion, optimizer, epoch, device, batch_log_freq=10
+):
     model.train()
     running_loss = 0
     total_correct = 0
@@ -40,10 +43,11 @@ def train_model(model, train_loader, criterion, optimizer, epoch, device, batch_
         print("Training Confusion matrix (rows=true, cols=pred):")
         print(cm)
         print("\n")
-        
+
         # Calculate precision and recall for each class
         precision_scores = []
         recall_scores = []
+        f2_scores = []
         for i in range(cm.shape[0]):
             # Precision = TP / (TP + FP)
             if cm[:, i].sum() > 0:
@@ -51,37 +55,39 @@ def train_model(model, train_loader, criterion, optimizer, epoch, device, batch_
             else:
                 precision = 0.0
             precision_scores.append(precision)
-            
+
             # Recall = TP / (TP + FN)
             if cm[i, :].sum() > 0:
                 recall = cm[i, i] / cm[i, :].sum()
             else:
                 recall = 0.0
             recall_scores.append(recall)
-        
+            f2_scores.append((5 * precision * recall) / (4 * precision + recall))
         # Calculate Cohen's kappa
         kappa = cohen_kappa_score(y_true, y_pred)
         print(f"Training Cohen's Kappa: {kappa:.4f}")
-        
+
         return {
-            'avg_loss': avg_loss,
-            'accuracy': accuracy,
-            'confusion_matrix': cm,
-            'precision': precision_scores,
-            'recall': recall_scores,
-            'kappa': kappa
+            "avg_loss": avg_loss,
+            "accuracy": accuracy,
+            "confusion_matrix": cm,
+            "precision": precision_scores,
+            "recall": recall_scores,
+            "kappa": kappa,
+            "f2_score": f2_scores,
         }
     else:
         return {
-            'avg_loss': avg_loss,
-            'accuracy': accuracy,
-            'confusion_matrix': None,
-            'precision': None,
-            'recall': None,
-            'kappa': None
+            "avg_loss": avg_loss,
+            "accuracy": accuracy,
+            "confusion_matrix": None,
+            "precision": None,
+            "recall": None,
+            "kappa": None,
         }
 
-def test_model(model, test_loader, criterion, device, batch_log_freq = 10):
+
+def test_model(model, test_loader, criterion, device, batch_log_freq=10):
     model.eval()
     running_loss = 0
     total_correct = 0
@@ -116,10 +122,11 @@ def test_model(model, test_loader, criterion, device, batch_log_freq = 10):
         print("Validation Confusion matrix (rows=true, cols=pred):")
         print(cm)
         print("\n")
-        
+
         # Calculate precision and recall for each class
         precision_scores = []
         recall_scores = []
+        f2_scores = []
         for i in range(cm.shape[0]):
             # Precision = TP / (TP + FP)
             if cm[:, i].sum() > 0:
@@ -127,32 +134,34 @@ def test_model(model, test_loader, criterion, device, batch_log_freq = 10):
             else:
                 precision = 0.0
             precision_scores.append(precision)
-            
+
             # Recall = TP / (TP + FN)
             if cm[i, :].sum() > 0:
                 recall = cm[i, i] / cm[i, :].sum()
             else:
                 recall = 0.0
             recall_scores.append(recall)
-        
+            f2_scores.append((5 * precision * recall) / (4 * precision + recall))
+
         # Calculate Cohen's kappa
         kappa = cohen_kappa_score(y_true, y_pred)
         print(f"Validation Cohen's Kappa: {kappa:.4f}")
-        
+
         return {
-            'avg_loss': avg_loss,
-            'accuracy': accuracy,
-            'confusion_matrix': cm,
-            'precision': precision_scores,
-            'recall': recall_scores,
-            'kappa': kappa
+            "avg_loss": avg_loss,
+            "accuracy": accuracy,
+            "confusion_matrix": cm,
+            "precision": precision_scores,
+            "recall": recall_scores,
+            "kappa": kappa,
+            "f2_score": f2_scores,
         }
     else:
         return {
-            'avg_loss': avg_loss,
-            'accuracy': accuracy,
-            'confusion_matrix': None,
-            'precision': None,
-            'recall': None,
-            'kappa': None
+            "avg_loss": avg_loss,
+            "accuracy": accuracy,
+            "confusion_matrix": None,
+            "precision": None,
+            "recall": None,
+            "kappa": None,
         }

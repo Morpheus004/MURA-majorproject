@@ -4,7 +4,7 @@ import copy
 
 class EarlyStopping:
     """
-    Early stopping utility to stop training when validation recall for class 1 stops improving
+    Early stopping utility to stop training when provided metric for class 1 stops improving
     and validation loss doesn't decrease.
     
     Args:
@@ -14,11 +14,12 @@ class EarlyStopping:
         verbose (bool): Whether to print early stopping messages
     """
     
-    def __init__(self, patience=7, min_delta=0.001, restore_best_weights=True, verbose=True):
+    def __init__(self, metric_name, patience=7, min_delta=0.001, restore_best_weights=True, verbose=True):
         self.patience = patience
         self.min_delta = min_delta
         self.restore_best_weights = restore_best_weights
         self.verbose = verbose
+        self.metric_name = metric_name
         
         self.counter = 0
         self.best_score = None
@@ -27,12 +28,12 @@ class EarlyStopping:
         self.best_weights = None
         self.best_epoch = None
         
-    def __call__(self, val_recall, val_loss, model, epoch=None):
+    def __call__(self, metric, val_loss, model, epoch=None):
         """
         Check if early stopping criteria is met.
         
         Args:
-            val_recall (float): Current validation recall for class 1
+            metric (float): Current metric for class 1
             val_loss (float): Current validation loss
             model: PyTorch model to potentially restore weights from
             epoch (int, optional): Current epoch index to record when improvement occurs
@@ -40,7 +41,7 @@ class EarlyStopping:
         Returns:
             bool: True if early stopping should be triggered
         """
-        score = val_recall
+        score = metric
         
         # Check if this is an improvement: recall improved AND loss didn't increase
         is_improvement = False
@@ -57,20 +58,20 @@ class EarlyStopping:
             self.counter = 0
             self.save_checkpoint(model, epoch)
             if self.verbose:
-                print(f'EarlyStopping: Improvement! Recall: {score:.4f}, Loss: {val_loss:.4f}')
+                print(f'EarlyStopping: Improvement! {self.metric_name}: {score:.4f}, Loss: {val_loss:.4f}')
         else:
             self.counter += 1
             if self.verbose:
-                print(f'EarlyStopping counter: {self.counter} out of {self.patience} (Best recall: {self.best_score:.4f}, Best loss: {self.best_loss:.4f})')
+                print(f'EarlyStopping counter: {self.counter} out of {self.patience} (Best {self.metric_name}: {self.best_score:.4f}, Best loss: {self.best_loss:.4f})')
             if self.counter >= self.patience:
                 self.early_stop = True
                 if self.verbose:
-                    print(f'Early stopping triggered! Best recall: {self.best_score:.4f}, Best loss: {self.best_loss:.4f}')
+                    print(f'Early stopping triggered! Best {self.metric_name}: {self.best_score:.4f}, Best loss: {self.best_loss:.4f}')
             
         return self.early_stop
     
     def save_checkpoint(self, model, epoch=None):
-        """Save model weights when validation recall improves."""
+        """Save model weights when validation metric improves."""
         if self.restore_best_weights:
             self.best_weights = copy.deepcopy(model.state_dict())
             if epoch is not None:

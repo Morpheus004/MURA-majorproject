@@ -144,7 +144,7 @@ def main():
     print(f"Training completed! Best recall: {best_recall:.4f}")
     
     # Log best recall to wandb
-    wandb.log({"best_recall": best_recall})
+    wandb.log({"best_recall": best_recall,"best_epoch":early_stopping.best_epoch})
     
     # Log the best model artifact
     if os.path.exists('best_model.pt'):

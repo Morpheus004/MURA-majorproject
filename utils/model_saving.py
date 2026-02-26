@@ -14,7 +14,8 @@ def initialize_training_history():
         'val_recalls': [],       # class 1
         'train_kappas': [],
         'val_kappas': [],
-        'confusion_matrices': []
+        'confusion_matrices': [],
+        'val_f2s': []
     }
 
 def _extract_class1_metrics(metrics):
@@ -25,12 +26,13 @@ def _extract_class1_metrics(metrics):
     rec = metrics['recall'][1] if metrics.get('recall') is not None else 0.0
     kappa = metrics.get('kappa', 0.0) if metrics.get('kappa') is not None else 0.0
     cm = metrics.get('confusion_matrix')
-    return loss, acc, prec, rec, kappa, cm
+    f2 = metrics['f2_score'][1] if metrics.get('f2_score') is not None else 0.0
+    return loss, acc, prec, rec, kappa, cm, f2
 
 def update_history(history, epoch, train_metrics, val_metrics):
     """Append current epoch's metrics to history and return convenient val scalars."""
-    train_loss, train_acc, train_prec, train_rec, train_kappa, _ = _extract_class1_metrics(train_metrics)
-    val_loss, val_acc, val_prec, val_rec, val_kappa, val_cm = _extract_class1_metrics(val_metrics)
+    train_loss, train_acc, train_prec, train_rec, train_kappa, _, train_f2 = _extract_class1_metrics(train_metrics)
+    val_loss, val_acc, val_prec, val_rec, val_kappa, val_cm, val_f2 = _extract_class1_metrics(val_metrics)
 
     history['epochs'].append(epoch)
     history['train_losses'].append(train_loss)
@@ -41,19 +43,21 @@ def update_history(history, epoch, train_metrics, val_metrics):
     history['val_precisions'].append(val_prec)
     history['train_recalls'].append(train_rec)
     history['val_recalls'].append(val_rec)
+    history['val_f2'].append(val_f2)
     history['train_kappas'].append(train_kappa)
     history['val_kappas'].append(val_kappa)
     if val_cm is not None:
         history['confusion_matrices'].append(val_cm.copy())
 
-    return {'val_loss': val_loss, 'val_acc': val_acc, 'val_prec': val_prec, 'val_rec': val_rec, 'val_kappa': val_kappa}
+    return {'val_loss': val_loss, 'val_acc': val_acc, 'val_prec': val_prec, 'val_rec': val_rec, 'val_kappa': val_kappa, 'val_f2': val_f2}
 
-def save_checkpoint_with_history(path, model, optimizer, epoch, best_recall, train_metrics, val_metrics, history):
+def save_checkpoint_with_history(path, model, optimizer, epoch, best_metric, train_metrics, val_metrics, history, metric_name):
+    s = f"best_{metric_name}"
     torch.save({
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict(),
         'epoch': epoch,
-        'best_recall': best_recall,
+        s: best_metric,
         'train_metrics': train_metrics,
         'val_metrics': val_metrics,
         'training_history': history
