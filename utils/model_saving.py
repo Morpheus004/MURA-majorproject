@@ -43,7 +43,7 @@ def update_history(history, epoch, train_metrics, val_metrics):
     history['val_precisions'].append(val_prec)
     history['train_recalls'].append(train_rec)
     history['val_recalls'].append(val_rec)
-    history['val_f2'].append(val_f2)
+    history['val_f2s'].append(val_f2)
     history['train_kappas'].append(train_kappa)
     history['val_kappas'].append(val_kappa)
     if val_cm is not None:
