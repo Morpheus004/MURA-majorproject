@@ -44,12 +44,13 @@ def update_history(history, epoch, train_metrics, val_metrics):
     history['train_recalls'].append(train_rec)
     history['val_recalls'].append(val_rec)
     history['val_f2s'].append(val_f2)
+    history['train_f2s'].append(train_f2)
     history['train_kappas'].append(train_kappa)
     history['val_kappas'].append(val_kappa)
     if val_cm is not None:
         history['confusion_matrices'].append(val_cm.copy())
 
-    return {'val_loss': val_loss, 'val_acc': val_acc, 'val_prec': val_prec, 'val_rec': val_rec, 'val_kappa': val_kappa, 'val_f2': val_f2}
+    return {'val_loss': val_loss, 'val_acc': val_acc, 'val_prec': val_prec, 'val_rec': val_rec, 'val_kappa': val_kappa, 'val_f2': val_f2, 'train_f2': train_f2}
 
 def save_checkpoint_with_history(path, model, optimizer, epoch, best_metric, train_metrics, val_metrics, history, metric_name):
     s = f"best_{metric_name}"
