@@ -15,7 +15,8 @@ def initialize_training_history():
         'train_kappas': [],
         'val_kappas': [],
         'confusion_matrices': [],
-        'val_f2s': []
+        'val_f2s': [],
+        'train_f2s': []
     }
 
 def _extract_class1_metrics(metrics):
