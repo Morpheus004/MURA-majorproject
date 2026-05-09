@@ -21,14 +21,17 @@ def train_model(
         x, y = x.to(device), y.to(device)
         if use_sam:
             # ── First pass: compute loss at current weights, perturb ──────────
+            def closure():
+                optimizer.zero_grad()
+                output = model(x)
+                loss = criterion(output, y)
+                loss.backward()
+                return loss
+            
             y_hat = model(x)
             loss = criterion(y_hat, y)
             loss.backward()
-            optimizer.first_step(zero_grad=True)
- 
-            # ── Second pass: compute loss at perturbed weights, update ────────
-            criterion(model(x), y).backward()
-            optimizer.second_step(zero_grad=True)
+            optimizer.step(closure)
         else:
             # ── Standard step (AdamW / SGD / RMSprop) ────────────────────────
             optimizer.zero_grad()
