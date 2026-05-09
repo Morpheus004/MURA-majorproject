@@ -8,8 +8,8 @@ def train_model(
     model, train_loader, criterion, optimizer, epoch, device, batch_log_freq=10
 ):
     # Detect SAM by checking if the optimizer has first_step/second_step
-    use_sam = hasattr(optimizer, 'first_step')
-    
+    use_sam = hasattr(optimizer, "first_step")
+
     model.train()
     running_loss = 0
     total_correct = 0
@@ -27,11 +27,10 @@ def train_model(
                 loss = criterion(output, y)
                 loss.backward()
                 return loss
-            
-            y_hat = model(x)
-            loss = criterion(y_hat, y)
-            loss.backward()
-            optimizer.step(closure)
+
+            loss = optimizer.step(closure)  # SAM does both passes inside step()
+            with torch.no_grad():
+                y_hat = model(x)
         else:
             # ── Standard step (AdamW / SGD / RMSprop) ────────────────────────
             optimizer.zero_grad()
