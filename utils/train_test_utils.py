@@ -7,6 +7,9 @@ from tqdm import tqdm
 def train_model(
     model, train_loader, criterion, optimizer, epoch, device, batch_log_freq=10
 ):
+    # Detect SAM by checking if the optimizer has first_step/second_step
+    use_sam = hasattr(optimizer, 'first_step')
+    
     model.train()
     running_loss = 0
     total_correct = 0
@@ -16,11 +19,23 @@ def train_model(
 
     for batch_idx, (x, y) in enumerate(tqdm(train_loader)):
         x, y = x.to(device), y.to(device)
-        optimizer.zero_grad()
-        y_hat = model(x)
-        loss = criterion(y_hat, y)
-        loss.backward()
-        optimizer.step()
+        if use_sam:
+            # ── First pass: compute loss at current weights, perturb ──────────
+            y_hat = model(x)
+            loss = criterion(y_hat, y)
+            loss.backward()
+            optimizer.first_step(zero_grad=True)
+ 
+            # ── Second pass: compute loss at perturbed weights, update ────────
+            criterion(model(x), y).backward()
+            optimizer.second_step(zero_grad=True)
+        else:
+            # ── Standard step (AdamW / SGD / RMSprop) ────────────────────────
+            optimizer.zero_grad()
+            y_hat = model(x)
+            loss = criterion(y_hat, y)
+            loss.backward()
+            optimizer.step()
 
         running_loss += loss.item()
         preds = y_hat.argmax(dim=1)
