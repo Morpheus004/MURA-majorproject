@@ -21,14 +21,15 @@ def train_model(
         x, y = x.to(device), y.to(device)
         if use_sam:
             # ── First pass: compute loss at current weights, perturb ──────────
-            def closure():
-                optimizer.zero_grad()
-                output = model(x)
-                loss = criterion(output, y)
-                loss.backward()
-                return loss
-
-            loss = optimizer.step(closure)  # SAM does both passes inside step()
+            optimizer.zero_grad()
+            output = model(x)
+            loss = criterion(output, y)
+            loss.backward()
+            optimizer.first_step(zero_grad=True)  # perturbs weights
+        
+            # ── Second pass: forward + backward at perturbed weights ──
+            criterion(model(x), y).backward()
+            optimizer.second_step(zero_grad=True)  # restores + updates weights
             with torch.no_grad():
                 y_hat = model(x)
         else:
