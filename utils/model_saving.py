@@ -53,14 +53,26 @@ def update_history(history, epoch, train_metrics, val_metrics):
 
     return {'val_loss': val_loss, 'val_acc': val_acc, 'val_prec': val_prec, 'val_rec': val_rec, 'val_kappa': val_kappa, 'val_f2': val_f2, 'train_f2': train_f2}
 
-def save_checkpoint_with_history(path, model, optimizer, epoch, best_metric, train_metrics, val_metrics, history, metric_name):
+def save_checkpoint_with_history(path, model, optimizer, epoch, best_metric,
+                                  train_metrics, val_metrics, history, metric_name,
+                                  config=None, early_stopping=None):
     s = f"best_{metric_name}"
-    torch.save({
-        'model': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'epoch': epoch,
-        s: best_metric,
-        'train_metrics': train_metrics,
-        'val_metrics': val_metrics,
-        'training_history': history
-    }, path)
+    payload = {
+        'model':            model.state_dict(),
+        'optimizer':        optimizer.state_dict(),
+        'epoch':            epoch,
+        s:                  best_metric,
+        'train_metrics':    train_metrics,
+        'val_metrics':      val_metrics,
+        'training_history': history,
+    }
+    if config is not None:
+        payload['config'] = config
+    if early_stopping is not None:
+        payload['early_stopping'] = {
+            'counter':     early_stopping.counter,
+            'best_score':  early_stopping.best_score,
+            'best_loss':   early_stopping.best_loss,
+            'best_epoch':  early_stopping.best_epoch,
+        }
+    torch.save(payload, path)
