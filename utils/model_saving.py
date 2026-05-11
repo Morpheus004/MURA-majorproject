@@ -53,13 +53,14 @@ def update_history(history, epoch, train_metrics, val_metrics):
 
     return {'val_loss': val_loss, 'val_acc': val_acc, 'val_prec': val_prec, 'val_rec': val_rec, 'val_kappa': val_kappa, 'val_f2': val_f2, 'train_f2': train_f2}
 
-def save_checkpoint_with_history(path, model, optimizer, epoch, best_metric,
+def save_checkpoint_with_history(path, model, optimizer, scheduler, epoch, best_metric,
                                   train_metrics, val_metrics, history, metric_name,
                                   config=None, early_stopping=None):
     s = f"best_{metric_name}"
     payload = {
         'model':            model.state_dict(),
         'optimizer':        optimizer.state_dict(),
+        'scheduler': scheduler.state_dict(),
         'epoch':            epoch,
         s:                  best_metric,
         'train_metrics':    train_metrics,
